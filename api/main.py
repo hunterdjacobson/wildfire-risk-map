@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from routers.fires import router as fires_router
 
 # Load .env file
 load_dotenv()
@@ -16,6 +17,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(fires_router)
+
 @app.on_event("startup")
 async def startup_event():
     print("Wildfire Risk API started")
@@ -23,6 +27,3 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "wildfire-risk-api"}
-
-# TODO: Include routers here later
-# app.include_router(...)
