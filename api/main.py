@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from routers.fires import router as fires_router
+from routers.risk import router as risk_router
 
 # Load .env file
 load_dotenv()
@@ -19,6 +20,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(fires_router)
+app.include_router(risk_router)
 
 @app.on_event("startup")
 async def startup_event():
