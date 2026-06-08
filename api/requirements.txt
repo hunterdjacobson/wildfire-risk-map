@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+python-dotenv
+apscheduler
+numpy
+scipy
+pydantic
