@@ -10,7 +10,6 @@ async def fetch_weather_for_points(points: list[dict]) -> list[dict]:
         return []
 
     # 1. DEDUPLICATION STEP
-    # Round to 1 decimal place (~11km) and pick one representative point per cell
     weather_cells = {}
     for p in points:
         key = (round(p['lat'], 1), round(p['lon'], 1))
@@ -19,7 +18,7 @@ async def fetch_weather_for_points(points: list[dict]) -> list[dict]:
 
     deduplicated_points = list(weather_cells.values())
     
-    # 2. FETCH STEP
+    # 2. FETCH STEP (Optimized Serial Chunking)
     enriched_results = []
     chunk_size = 50
     
@@ -43,10 +42,11 @@ async def fetch_weather_for_points(points: list[dict]) -> list[dict]:
                 response.raise_for_status()
                 data = response.json()
                 
+                # Open-Meteo returns a list if multiple locations are requested
                 if not isinstance(data, list):
                     data = [data]
                 
-                for idx, result in enumerate(data):
+                for result in data:
                     current = result.get("current", {})
                     enriched_results.append({
                         "lat": result.get("latitude"),
@@ -61,30 +61,24 @@ async def fetch_weather_for_points(points: list[dict]) -> list[dict]:
                     
             except Exception as e:
                 print(f"Error fetching weather for chunk starting at index {i}: {e}")
-                # Fallback for failed points in chunk
+                # Fallback error definitions: Mark points in failed chunk as None
                 for p in chunk:
                     enriched_results.append({
-                        "lat": p["lat"],
-                        "lon": p["lon"],
-                        "temp_c": None,
-                        "humidity_pct": None,
-                        "wind_speed_ms": None,
-                        "wind_dir_deg": None,
-                        "precip_mm": None,
-                        "elevation_m": 0
+                        "lat": p["lat"], "lon": p["lon"],
+                        "temp_c": None, "humidity_pct": None,
+                        "wind_speed_ms": None, "wind_dir_deg": None,
+                        "precip_mm": None, "elevation_m": 0
                     })
             
-            # Rate limit safety delay
-            if i + chunk_size < len(deduplicated_points):
-                await asyncio.sleep(0.5)
+            # MANDATORY PAUSE: 600ms gap between requests to satisfy burst constraints
+            await asyncio.sleep(0.6)
 
-    # Build lookup dict for mapping step
+    # 3. MAPPING STEP (Spatial coordinate mapping)
     weather_lookup = {
         (round(r['lat'], 1), round(r['lon'], 1)): r 
         for r in enriched_results
     }
 
-    # 3. MAPPING STEP
     final_enriched_list = []
     for p in points:
         point_copy = p.copy()
@@ -95,14 +89,11 @@ async def fetch_weather_for_points(points: list[dict]) -> list[dict]:
             point_copy.update({
                 "temp_c": weather_data.get("temp_c"),
                 "humidity_pct": weather_data.get("humidity_pct"),
-                "wind_speed_ms": weather_data.get("wind_speed_10m") if "wind_speed_10m" in weather_data else weather_data.get("wind_speed_ms"), # Handle possible naming variations
-                "wind_dir_deg": weather_data.get("wind_direction_10m") if "wind_direction_10m" in weather_data else weather_data.get("wind_dir_deg"),
+                "wind_speed_ms": weather_data.get("wind_speed_ms"),
+                "wind_dir_deg": weather_data.get("wind_dir_deg"),
                 "precip_mm": weather_data.get("precip_mm"),
                 "elevation_m": weather_data.get("elevation_m")
             })
-            # Ensure wind fields are correctly mapped if they came from our enriched_results structure
-            point_copy["wind_speed_ms"] = weather_data.get("wind_speed_ms")
-            point_copy["wind_dir_deg"] = weather_data.get("wind_dir_deg")
         else:
             point_copy.update({
                 "temp_c": None, "humidity_pct": None, "wind_speed_ms": None,

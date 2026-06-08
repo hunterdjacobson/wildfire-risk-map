@@ -14,7 +14,7 @@ async def refresh_risk_data(api_key: str):
     try:
         # 1. Fetch raw hotspots
         # Use default 'days=1' as in routers/risk.py
-        hotspots = await fetch_firms_hotspots(api_key, DEFAULT_BBOX, days=1)
+        hotspots = await fetch_firms_hotspots(api_key, DEFAULT_BBOX, days=2)
         
         # 2. Enrich with weather
         enriched_hotspots = await fetch_weather_for_points(hotspots)
